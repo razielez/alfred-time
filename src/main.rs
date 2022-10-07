@@ -44,6 +44,9 @@ fn is_number(str: &String) -> bool {
 }
 
 fn convert_to_date_time(str: &String) -> DateTime<Utc> {
+    if str.is_empty() {
+        return DateTime::default();
+    };
     let result: DateTime<Utc>;
     if is_number(str) {
         let len = str.len();
@@ -59,14 +62,12 @@ fn convert_to_date_time(str: &String) -> DateTime<Utc> {
 }
 
 fn str_to_date_time(str: &String) -> DateTime<Utc> {
-    let mut fmt = String::from("");
+    let  fmt= String::from("%Y-%m-%d %H:%M:%S %z");
     let f = DateTime::parse_from_str;
-    if is_date(str) {
-        fmt = String::from("%Y-%m-%d %z");
-    } else if is_date_time(str) {
-        fmt = String::from("%Y-%m-%d %H:%M:%S %z");
-    }
     let mut date_str = String::from(str);
+    if is_date(str) {
+        date_str.push_str(" 00:00:00");
+    }
     date_str.push_str(" +0000");
     let mut  time = match f(&date_str, &*fmt) {
         Ok(datetime) => datetime,
@@ -84,12 +85,8 @@ fn is_date(str: &String) -> bool {
     str.contains("-") && !str.contains(":")
 }
 
-fn is_date_time(str: &String) -> bool {
-    str.contains("-") && str.contains(":")
-}
-
 fn sec_ts_to_date_time(str: &String) -> DateTime<Utc> {
-    let secs: &i64 = &str[0..10].parse::<i64>().unwrap();
+    let secs: &i64 = &str.parse::<i64>().unwrap();
     let time = NaiveDateTime::from_timestamp(*secs, 0);
     native_to_date_time(&time)
 }
@@ -120,11 +117,10 @@ const OUTPUT_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 fn alfred_time_workflow_output(time: &DateTime<Utc>) {
     let local_time: DateTime<FixedOffset> = local_date_time(&time);
-    let ts = time.timestamp();
     let outputs: Vec<Output> = vec![
         Output {
             title: "时间戳(毫秒)".to_string(),
-            value: ts.to_string(),
+            value: time.timestamp_millis().to_string(),
         },
         Output {
             title: "UTC+8".to_string(),
@@ -138,11 +134,13 @@ fn alfred_time_workflow_output(time: &DateTime<Utc>) {
     let items: Vec<alfred::Item> = outputs
         .into_iter()
         .map(|x| {
-            alfred::ItemBuilder::new(x.title)
-                .arg(x.value)
-                .quicklook_url("")
-                .icon_path("icon")
-                .subtitle("")
+            alfred::ItemBuilder::new(x.value.clone())
+                .subtitle(x.title.clone())
+                .arg(x.value.clone())
+                .quicklook_url(x.value.clone())
+                .text_copy(x.value.clone())
+                .icon_filetype("fileicon")
+                .icon_file("../resource/icon.png")
                 .into_item()
         })
         .collect();
@@ -165,6 +163,7 @@ mod tests {
     use crate::{alfred_time_workflow, convert_to_date_time, ms_ts_to_date_time, str_to_date_time, sum, Args, OUTPUT_FMT, native_to_date_time};
 
     const DATE_TIME_STR: &str = "2022-10-04 13:24:54";
+    const DATE_STR: &str = "2022-10-04";
     const MS_STR: &str = "1664861094000";
     const SEC_STR: &str = "1664861094";
 
@@ -178,16 +177,26 @@ mod tests {
         let date_time = convert_to_date_time(&String::from(DATE_TIME_STR));
         let date_time_by_ms = convert_to_date_time(&String::from(MS_STR));
         let date_time_by_sec = convert_to_date_time(&String::from(SEC_STR));
+        let date = convert_to_date_time(&String::from(DATE_STR));
+        println!("date: {}", date);
         println!("0: {}, 1: {}, 2:{}", date_time.timestamp(), date_time_by_ms.timestamp(), date_time_by_sec.timestamp());
         assert_eq!(date_time, date_time_by_ms);
         assert_eq!(date_time, date_time_by_sec);
-        println!("date_time: {}", date_time)
+        println!("date_time: {}", date_time);
+        let date0 = convert_to_date_time(&String::from("1000"));
+        println!("date0: {}", date0);
     }
 
     #[test]
     fn test_alfred() {
         alfred_time_workflow(Args {
             query: String::from(DATE_TIME_STR),
+        });
+        alfred_time_workflow(Args {
+            query: String::from(MS_STR),
+        });
+        alfred_time_workflow(Args {
+            query: String::from(SEC_STR),
         });
     }
 
@@ -239,5 +248,12 @@ mod tests {
             Ok(x) => println!("time: {}", x),
             Err(err) => println!("err: {}", err)
         };
+        str = String::from("2022-10-10");
+        str.push_str(" 00:00:00");
+        str.push_str(" +0000");
+        match  DateTime::parse_from_str(&str, "%Y-%m-%d %H:%M:%S %z"){
+            Ok(x) => print!("success: {}", x),
+            Err(err) => println!("err: {}", err)
+        }
     }
 }
